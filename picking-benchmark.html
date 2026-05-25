@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Self-contained WebGL hit-detection benchmark. Runs entirely client-side. No analytics, no telemetry.">
+<meta name="robots" content="index, follow">
+<title>WebGL Picking Pipeline Benchmark Suite v3 — scale + concurrency</title>
+<style>
+  :root {
+    --bg: #0a0a0d;
+    --bg-elev: #14141c;
+    --bg-card: #1a1a24;
+    --border: #2a2a36;
+    --text: #e0e0e8;
+    --text-dim: #8a8a96;
+    --accent: #6fdcc8;
+    --accent-purple: #d8b8f0;
+    --accent-blue: #88aaff;
+    --warn: #f0c878;
+    --good: #8feeb0;
+    --bad: #f08888;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, monospace;
+    background: var(--bg); color: var(--text);
+    margin: 0; padding: 0; line-height: 1.55;
+  }
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+  header { margin-bottom: 32px; }
+  h1 {
+    font-size: 22px; font-weight: 600; color: var(--accent);
+    margin: 0 0 8px 0; letter-spacing: -0.01em;
+  }
+  .subtitle { color: var(--text-dim); font-size: 13px; max-width: 700px; }
+  h2 {
+    font-size: 15px; color: var(--accent-purple);
+    margin: 32px 0 12px 0; font-weight: 500;
+    border-bottom: 1px solid var(--border); padding-bottom: 6px;
+  }
+  .layout {
+    display: grid; grid-template-columns: 540px 1fr;
+    gap: 24px; align-items: start;
+  }
+  .visual {
+    background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px;
+    position: sticky; top: 12px;
+  }
+  canvas { display: block; background: #050507; width: 100%; height: auto; }
+  .canvas-label { color: var(--text-dim); font-size: 11px; margin-top: 8px; min-height: 16px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  button {
+    background: var(--bg-card); color: var(--text);
+    border: 1px solid var(--border); padding: 8px 14px;
+    font-family: inherit; font-size: 12px; cursor: pointer;
+    border-radius: 4px; transition: background 0.15s;
+  }
+  button:hover:not(:disabled) { background: var(--border); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  button.primary { background: #2a3a7a; border-color: #4a5a9a; color: #d0ddff; }
+  button.primary:hover:not(:disabled) { background: #3a4a8a; }
+  .status {
+    color: var(--accent); margin: 8px 0;
+    min-height: 18px; font-size: 12px;
+  }
+  .progress {
+    background: var(--bg-elev); border-radius: 3px;
+    height: 4px; margin: 8px 0; overflow: hidden;
+  }
+  .progress-bar {
+    background: var(--accent); height: 100%; width: 0%;
+    transition: width 0.2s;
+  }
+  .results {
+    background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: 6px; padding: 16px; margin-bottom: 16px;
+  }
+  .test-group h3 {
+    font-size: 13px; color: var(--accent-blue);
+    margin: 0 0 4px 0; font-weight: 500;
+  }
+  .test-group .hyp {
+    color: var(--text-dim); font-size: 11px; font-style: italic;
+    margin-bottom: 8px; line-height: 1.4;
+  }
+  table {
+    border-collapse: collapse; width: 100%; font-size: 12px;
+  }
+  th, td {
+    text-align: left; padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--text-dim); font-weight: 500; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  td.config { color: var(--accent); }
+  td.highlight-good { color: var(--good); font-weight: 500; }
+  td.highlight-bad { color: var(--bad); font-weight: 500; }
+  .findings {
+    background: var(--bg-card); border-left: 3px solid var(--accent-purple);
+    padding: 12px 16px; margin: 12px 0;
+    border-radius: 0 4px 4px 0; font-size: 12px;
+  }
+  .findings strong { color: var(--accent-purple); }
+  .env-info {
+    background: var(--bg-card); padding: 12px;
+    border-radius: 4px; font-size: 11px;
+    color: var(--text-dim); margin-bottom: 16px;
+  }
+  .env-info strong { color: var(--text); }
+  .footer {
+    color: var(--text-dim); font-size: 11px;
+    margin-top: 40px; padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+  .test-list {
+    color: var(--text-dim); font-size: 12px;
+    margin: 12px 0; line-height: 1.7;
+  }
+  .test-list .num {
+    color: var(--accent); display: inline-block; width: 24px;
+  }
+  .test-list .name { color: var(--text); }
+  code {
+    background: var(--bg-elev); padding: 1px 6px;
+    border-radius: 3px; font-size: 11px;
+    color: var(--accent-purple);
+  }
+
+  /* --- Responsive: phones / narrow viewports --- */
+  @media (max-width: 900px) {
+    .container { padding: 14px; }
+    .layout { grid-template-columns: 1fr; gap: 18px; }
+    .visual { position: static; padding: 8px; }
+    .controls { gap: 6px; }
+    button { padding: 10px 12px; font-size: 12px; }
+    h1 { font-size: 18px; }
+    h2 { font-size: 14px; margin: 24px 0 10px 0; }
+    .subtitle { font-size: 12px; }
+    table { font-size: 11px; }
+    th, td { padding: 4px 6px; }
+  }
+  @media (max-width: 480px) {
+    .container { padding: 10px; }
+    h1 { font-size: 16px; }
+    .controls { flex-direction: column; align-items: stretch; }
+    button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>WebGL Picking Pipeline Benchmark v3 — scale &amp; concurrency</h1>
+  <div class="subtitle">
+    Builds on v2 by adding tests at production scale (10–1000 draw calls per frame),
+    framebuffer size variation, and concurrent main-thread work to measure async readback's
+    true value. Tests v2 couldn't see clearly due to single-quad noise floor.
+  </div>
+</header>
+
+<div class="env-info" id="env-info">Detecting environment...</div>
+
+<div class="layout">
+  <div class="visual">
+    <canvas id="canvas" width="1024" height="1024"></canvas>
+    <div class="canvas-label" id="canvas-label">Test scene renders here</div>
+  </div>
+  
+  <div>
+    <div class="controls">
+      <button id="run-all" class="primary">Run full v3 suite</button>
+      <button id="run-quick">Quick run</button>
+      <button id="copy-results" disabled>Copy as markdown</button>
+      <button id="email-results" disabled title="Copies results, then opens your mail client. Paste in the body and send.">Email results to bitmosh</button>
+    </div>
+    <div class="status" id="status">Ready. 5 tests, ~25 measurements total.</div>
+    <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
+    
+    <h2>v3 test plan</h2>
+    <div class="test-list">
+      <div><span class="num">J.</span><span class="name">Draw call scaling</span> — picking cost with 1, 10, 100, 1000 quads</div>
+      <div><span class="num">K.</span><span class="name">Framebuffer size impact</span> — 256, 512, 1024, 2048 framebuffer sizes</div>
+      <div><span class="num">L.</span><span class="name">PICKING_MODE bailout at scale</span> — bailout savings with 1, 100, 1000 quads</div>
+      <div><span class="num">M.</span><span class="name">Concurrent JS work during async readback</span> — async's real value</div>
+      <div><span class="num">N.</span><span class="name">Realistic graph simulation</span> — 1000 small quads, picking on/off</div>
+    </div>
+    
+    <div id="results-container"></div>
+  </div>
+</div>
+
+<div class="footer">
+  Built for LumaWeave / Sigma.js readPixels investigation. v3 focuses on scale and concurrency.
+  <a href="https://bitmosh.dev" target="_blank">bitmosh.dev</a>
+</div>
+
+</div>
+
+<script>
+'use strict';
+
+const canvas = document.getElementById('canvas');
+let gl = canvas.getContext('webgl2', { antialias: false, preserveDrawingBuffer: false });
+let isWebGL2 = !!gl;
+if (!gl) gl = canvas.getContext('webgl', { antialias: false });
+if (!gl) { document.getElementById('status').textContent = 'WebGL not supported.'; throw new Error('No WebGL'); }
+
+const dbgInfo = gl.getExtension('WEBGL_debug_renderer_info');
+const envInfo = {
+  userAgent: navigator.userAgent,
+  webglVersion: isWebGL2 ? 'WebGL2' : 'WebGL1',
+  gpuVendor: dbgInfo ? gl.getParameter(dbgInfo.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+  gpuRenderer: dbgInfo ? gl.getParameter(dbgInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+  pixelRatio: window.devicePixelRatio,
+  hardwareConcurrency: navigator.hardwareConcurrency,
+  timestamp: new Date().toISOString(),
+};
+
+document.getElementById('env-info').innerHTML = `
+  <div><strong>WebGL:</strong> ${envInfo.webglVersion}</div>
+  <div><strong>GPU vendor:</strong> ${envInfo.gpuVendor}</div>
+  <div><strong>GPU renderer:</strong> ${envInfo.gpuRenderer}</div>
+  <div><strong>UA:</strong> <span style="font-size: 10px">${envInfo.userAgent}</span></div>
+`;
+
+// ============================================================
+// Shaders
+// ============================================================
+
+const GLSL = isWebGL2 ? '#version 300 es\n' : '';
+const ATTR = isWebGL2 ? 'in' : 'attribute';
+const VOUT = isWebGL2 ? 'out' : 'varying';
+const VIN = isWebGL2 ? 'in' : 'varying';
+const OUT_DECL = isWebGL2 ? 'out vec4 outColor;' : '';
+const FRAG_OUT = isWebGL2 ? 'outColor' : 'gl_FragColor';
+
+function compile(type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(sh), '\n', src);
+    throw new Error('Shader compile failed');
+  }
+  return sh;
+}
+function makeProgram(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('Link failed: ' + gl.getProgramInfoLog(p));
+  return p;
+}
+
+// Vertex shader with per-quad position offset uniform
+const vs = `${GLSL}
+${ATTR} vec2 a_pos;
+uniform vec2 u_offset;
+uniform float u_scale;
+${VOUT} vec2 v_uv;
+void main() {
+  v_uv = a_pos * 0.5 + 0.5;
+  vec2 p = a_pos * u_scale + u_offset;
+  gl_Position = vec4(p, 0.0, 1.0);
+}
+`;
+
+const fsSimple = `${GLSL}
+precision highp float;
+${VIN} vec2 v_uv;
+${OUT_DECL}
+void main() { ${FRAG_OUT} = vec4(v_uv.x, v_uv.y, 0.5, 1.0); }
+`;
+
+const fsHeavy = `${GLSL}
+precision highp float;
+${VIN} vec2 v_uv;
+uniform float u_time;
+${OUT_DECL}
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float noise(vec2 p) {
+  vec2 i=floor(p), f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1,0)),c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
+  vec2 u=f*f*(3.0-2.0*f);
+  return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
+}
+float fbm(vec2 p) {
+  float v=0.0, a=0.5;
+  for(int i=0;i<5;i++){v+=a*noise(p); p*=2.0; a*=0.5;}
+  return v;
+}
+void main() {
+  vec2 p=v_uv*4.0+vec2(u_time*0.5,u_time*0.3);
+  float n=fbm(p);
+  vec3 col=vec3(0.5+0.5*sin(n*6.0+u_time));
+  col+=vec3(0.2,0.4,0.6)*fbm(p*2.0);
+  float bloom=smoothstep(0.5,1.0,n);
+  col+=vec3(0.5,0.3,0.8)*bloom*bloom;
+  ${FRAG_OUT}=vec4(col,1.0);
+}
+`;
+
+// Heavy shader with PICKING_MODE bailout
+const fsHeavyBailout = `${GLSL}
+precision highp float;
+${VIN} vec2 v_uv;
+uniform float u_time;
+uniform bool u_pickingMode;
+uniform vec4 u_pickingColor;
+${OUT_DECL}
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float noise(vec2 p) {
+  vec2 i=floor(p), f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1,0)),c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
+  vec2 u=f*f*(3.0-2.0*f);
+  return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
+}
+float fbm(vec2 p) {
+  float v=0.0, a=0.5;
+  for(int i=0;i<5;i++){v+=a*noise(p); p*=2.0; a*=0.5;}
+  return v;
+}
+void main() {
+  if (u_pickingMode) { ${FRAG_OUT} = u_pickingColor; return; }
+  vec2 p=v_uv*4.0+vec2(u_time*0.5,u_time*0.3);
+  float n=fbm(p);
+  vec3 col=vec3(0.5+0.5*sin(n*6.0+u_time));
+  col+=vec3(0.2,0.4,0.6)*fbm(p*2.0);
+  float bloom=smoothstep(0.5,1.0,n);
+  col+=vec3(0.5,0.3,0.8)*bloom*bloom;
+  ${FRAG_OUT}=vec4(col,1.0);
+}
+`;
+
+// Heavy shader WITHOUT bailout (control: same uniforms exist but no early-return)
+const fsHeavyNoBailout = `${GLSL}
+precision highp float;
+${VIN} vec2 v_uv;
+uniform float u_time;
+uniform bool u_pickingMode;
+uniform vec4 u_pickingColor;
+${OUT_DECL}
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float noise(vec2 p) {
+  vec2 i=floor(p), f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1,0)),c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
+  vec2 u=f*f*(3.0-2.0*f);
+  return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
+}
+float fbm(vec2 p) {
+  float v=0.0, a=0.5;
+  for(int i=0;i<5;i++){v+=a*noise(p); p*=2.0; a*=0.5;}
+  return v;
+}
+void main() {
+  vec2 p=v_uv*4.0+vec2(u_time*0.5,u_time*0.3);
+  float n=fbm(p);
+  vec3 col=vec3(0.5+0.5*sin(n*6.0+u_time));
+  col+=vec3(0.2,0.4,0.6)*fbm(p*2.0);
+  float bloom=smoothstep(0.5,1.0,n);
+  col+=vec3(0.5,0.3,0.8)*bloom*bloom;
+  if (u_pickingMode) { ${FRAG_OUT} = u_pickingColor; }
+  else { ${FRAG_OUT} = vec4(col,1.0); }
+}
+`;
+
+const progSimple = makeProgram(vs, fsSimple);
+const progHeavy = makeProgram(vs, fsHeavy);
+const progHeavyBailout = makeProgram(vs, fsHeavyBailout);
+const progHeavyNoBailout = makeProgram(vs, fsHeavyNoBailout);
+
+// Quad geometry
+const quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+function setupQuad(prog) {
+  gl.useProgram(prog);
+  const a = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(a);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+}
+
+// ============================================================
+// FBO factory — can recreate at different sizes
+// ============================================================
+
+function createFBO(width, height) {
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+    throw new Error('FBO incomplete');
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { fbo, tex, width, height };
+}
+
+let fbo512 = createFBO(512, 512);
+
+// ============================================================
+// Multi-draw scene rendering
+// ============================================================
+
+// Generate random positions/scales for N quads — deterministic per N
+function generateQuadPositions(n, seed = 42) {
+  let s = seed;
+  const rand = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  const positions = [];
+  for (let i = 0; i < n; i++) {
+    positions.push({
+      x: rand() * 1.8 - 0.9,
+      y: rand() * 1.8 - 0.9,
+      scale: 0.02 + rand() * 0.08,
+    });
+  }
+  return positions;
+}
+
+// Cache positions per N so we don't regenerate
+const positionsCache = new Map();
+function getPositions(n) {
+  if (!positionsCache.has(n)) positionsCache.set(n, generateQuadPositions(n));
+  return positionsCache.get(n);
+}
+
+function drawNQuads(prog, fbo, n, time = 0, extraUniforms = {}) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.fbo);
+  gl.viewport(0, 0, fbo.width, fbo.height);
+  setupQuad(prog);
+  
+  const timeLoc = gl.getUniformLocation(prog, 'u_time');
+  if (timeLoc) gl.uniform1f(timeLoc, time);
+  
+  // Apply extra uniforms (e.g., u_pickingMode, u_pickingColor)
+  for (const [name, value] of Object.entries(extraUniforms)) {
+    const loc = gl.getUniformLocation(prog, name);
+    if (!loc) continue;
+    if (typeof value === 'number') gl.uniform1f(loc, value);
+    else if (typeof value === 'boolean') gl.uniform1i(loc, value ? 1 : 0);
+    else if (Array.isArray(value) && value.length === 4) gl.uniform4f(loc, ...value);
+  }
+  
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  
+  const offsetLoc = gl.getUniformLocation(prog, 'u_offset');
+  const scaleLoc = gl.getUniformLocation(prog, 'u_scale');
+  const positions = getPositions(n);
+  
+  for (let i = 0; i < n; i++) {
+    const p = positions[i];
+    gl.uniform2f(offsetLoc, p.x, p.y);
+    gl.uniform1f(scaleLoc, p.scale);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+}
+
+// ============================================================
+// Readback primitives
+// ============================================================
+
+function readPixelsSync(fbo, x, y, w, h, buffer) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.fbo);
+  gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
+}
+
+function clientWaitAsync(gl, sync, flags, intervalMs) {
+  return new Promise((resolve, reject) => {
+    function test() {
+      const res = gl.clientWaitSync(sync, flags, 0);
+      if (res === gl.WAIT_FAILED) { reject(new Error('clientWaitSync failed')); return; }
+      if (res === gl.TIMEOUT_EXPIRED) { setTimeout(test, intervalMs); return; }
+      resolve();
+    }
+    test();
+  });
+}
+
+async function readPixelsAsync(fbo, x, y, w, h, dest, pollMs = 1) {
+  if (!isWebGL2) return null;
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buf);
+  gl.bufferData(gl.PIXEL_PACK_BUFFER, dest.byteLength, gl.STREAM_READ);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.fbo);
+  gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  gl.flush();
+  await clientWaitAsync(gl, sync, 0, pollMs);
+  gl.deleteSync(sync);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buf);
+  gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, dest);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  gl.deleteBuffer(buf);
+}
+
+// ============================================================
+// Statistics
+// ============================================================
+
+function stats(samples, trimPct = 0.01) {
+  if (samples.length === 0) return null;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const trim = Math.floor(sorted.length * trimPct);
+  const trimmed = sorted.slice(trim, sorted.length - trim);
+  const mean = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+  const median = trimmed[Math.floor(trimmed.length / 2)];
+  const p95 = trimmed[Math.floor(trimmed.length * 0.95)];
+  const p99 = trimmed[Math.floor(trimmed.length * 0.99)];
+  const variance = trimmed.reduce((acc, x) => acc + (x - mean) ** 2, 0) / trimmed.length;
+  const stddev = Math.sqrt(variance);
+  return { mean, median, p95, p99, stddev, n: trimmed.length };
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ============================================================
+// UI
+// ============================================================
+
+const setStatus = (s) => document.getElementById('status').textContent = s;
+const resultsContainer = document.getElementById('results-container');
+const progressBar = document.getElementById('progress-bar');
+const allResults = [];
+let totalTests = 0, completedTests = 0;
+
+function makeTestGroup(letter, title, hyp) {
+  const div = document.createElement('div');
+  div.className = 'results';
+  div.innerHTML = `
+    <div class="test-group">
+      <h3>${letter}. ${title}</h3>
+      <div class="hyp">Hypothesis: ${hyp}</div>
+      <table>
+        <thead><tr>
+          <th>Condition</th><th class="num">N</th>
+          <th class="num">Mean (ms)</th><th class="num">Median</th>
+          <th class="num">p95</th><th class="num">p99</th><th class="num">StdDev</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="findings" id="finding-${letter}" style="display:none;"></div>
+    </div>`;
+  resultsContainer.appendChild(div);
+  return div.querySelector('tbody');
+}
+
+function addRow(tbody, condition, s, highlight) {
+  const tr = document.createElement('tr');
+  const cls = highlight === 'good' ? 'highlight-good' : highlight === 'bad' ? 'highlight-bad' : '';
+  tr.innerHTML = `
+    <td class="config">${condition}</td>
+    <td class="num">${s.n || '-'}</td>
+    <td class="num ${cls}">${(s.mean ?? 0).toFixed(3)}</td>
+    <td class="num">${(s.median ?? 0).toFixed(3)}</td>
+    <td class="num">${(s.p95 ?? 0).toFixed(3)}</td>
+    <td class="num">${(s.p99 ?? 0).toFixed(3)}</td>
+    <td class="num">${(s.stddev ?? 0).toFixed(3)}</td>`;
+  tbody.appendChild(tr);
+}
+
+function setFinding(letter, html) {
+  const el = document.getElementById(`finding-${letter}`);
+  el.style.display = 'block';
+  el.innerHTML = html;
+}
+
+function updateProgress() { progressBar.style.width = `${(completedTests/totalTests)*100}%`; }
+
+// ============================================================
+// Test J — Draw call scaling
+// ============================================================
+
+async function testJ(iters, warmupIters) {
+  const tbody = makeTestGroup('J', 'Draw call scaling with heavy shader',
+    'Picking pass cost should scale roughly linearly with quad count. Real Sigma renders 1000+ items per refresh.');
+  
+  const scales = [1, 10, 100, 1000];
+  const buf = new Uint8Array(4);
+  const results = {};
+  
+  for (const n of scales) {
+    document.getElementById('canvas-label').textContent = `Test J: ${n} quads with heavy shader`;
+    
+    for (let i = 0; i < warmupIters; i++) {
+      drawNQuads(progHeavy, fbo512, n, i * 0.01);
+      readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+    }
+    await sleep(20);
+    
+    const samples = [];
+    for (let i = 0; i < iters; i++) {
+      const t0 = performance.now();
+      drawNQuads(progHeavy, fbo512, n, i * 0.01);
+      readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+      samples.push(performance.now() - t0);
+    }
+    const s = stats(samples);
+    results[n] = s;
+    addRow(tbody, `${n} quad${n>1?'s':''} (draw + readPixels)`, s);
+    allResults.push({ test: 'J', condition: `${n}_quads`, ...s });
+    completedTests++; updateProgress();
+    await sleep(20);
+  }
+  
+  const r1 = results[1].mean;
+  const r1000 = results[1000].mean;
+  const scaling = r1000 / r1;
+  const perQuad = (r1000 - r1) / 999;
+  
+  setFinding('J', `<strong>Finding:</strong> 1 quad = ${r1.toFixed(2)}ms, 1000 quads = ${r1000.toFixed(2)}ms (${scaling.toFixed(0)}× scaling). 
+    Per-quad incremental cost: <strong>${(perQuad*1000).toFixed(2)}µs</strong>. 
+    For a real graph with 1000 items, the picking pass alone costs ~${r1000.toFixed(1)}ms per refresh — 
+    ${r1000 > 16 ? '<strong>over the 16ms frame budget</strong>' : 'within frame budget'}. 
+    This is the bottleneck refresh discipline (Layer 1) addresses by skipping the picking pass when nothing changed.`);
+}
+
+// ============================================================
+// Test K — Framebuffer size impact
+// ============================================================
+
+async function testK(iters, warmupIters) {
+  const tbody = makeTestGroup('K', 'Framebuffer size impact',
+    'Larger framebuffers mean rasterizing more pixels per quad. Real Sigma renders at viewport size (often 1024+).');
+  
+  const sizes = [256, 512, 1024, 2048];
+  const buf = new Uint8Array(4);
+  const results = {};
+  const QUAD_COUNT = 100;
+  
+  for (const size of sizes) {
+    document.getElementById('canvas-label').textContent = `Test K: ${QUAD_COUNT} quads at ${size}×${size} FBO`;
+    
+    const fbo = createFBO(size, size);
+    
+    for (let i = 0; i < warmupIters; i++) {
+      drawNQuads(progHeavy, fbo, QUAD_COUNT, i * 0.01);
+      readPixelsSync(fbo, 50, 50, 1, 1, buf);
+    }
+    await sleep(20);
+    
+    const samples = [];
+    for (let i = 0; i < iters; i++) {
+      const t0 = performance.now();
+      drawNQuads(progHeavy, fbo, QUAD_COUNT, i * 0.01);
+      readPixelsSync(fbo, 50, 50, 1, 1, buf);
+      samples.push(performance.now() - t0);
+    }
+    const s = stats(samples);
+    results[size] = s;
+    addRow(tbody, `${size}×${size} FBO, ${QUAD_COUNT} heavy quads`, s);
+    allResults.push({ test: 'K', condition: `fb_${size}`, ...s });
+    
+    // Clean up FBO
+    gl.deleteFramebuffer(fbo.fbo);
+    gl.deleteTexture(fbo.tex);
+    
+    completedTests++; updateProgress();
+    await sleep(20);
+  }
+  
+  const r256 = results[256].mean;
+  const r2048 = results[2048].mean;
+  const pixelRatio = (2048*2048) / (256*256); // 64x more pixels
+  const costRatio = r2048 / r256;
+  
+  setFinding('K', `<strong>Finding:</strong> 256×256 = ${r256.toFixed(2)}ms, 2048×2048 = ${r2048.toFixed(2)}ms 
+    (${costRatio.toFixed(1)}× cost for ${pixelRatio}× pixels). 
+    ${costRatio < pixelRatio * 0.3 
+      ? 'Cost scales sub-linearly with framebuffer size — GPU is efficient at large rasterization.' 
+      : 'Cost scales meaningfully with framebuffer size — larger viewports stress the picking pass more.'}
+    For Sigma users running on 4K displays, the picking pass cost may be substantially higher than benchmarks suggest.`);
+}
+
+// ============================================================
+// Test L — PICKING_MODE bailout at scale
+// ============================================================
+
+async function testL(iters, warmupIters) {
+  const tbody = makeTestGroup('L', 'PICKING_MODE bailout at scale',
+    'Bailout savings should compound with quad count. This is the headline test for the memo.');
+  
+  const scales = [1, 10, 100, 1000];
+  const buf = new Uint8Array(4);
+  const results = {};
+  
+  for (const n of scales) {
+    document.getElementById('canvas-label').textContent = `Test L: ${n} quads, bailout ON vs OFF`;
+    
+    // WITH bailout
+    for (let i = 0; i < warmupIters; i++) {
+      drawNQuads(progHeavyBailout, fbo512, n, i * 0.01, 
+        { u_pickingMode: true, u_pickingColor: [0.5,0.3,0.8,1.0] });
+      readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+    }
+    await sleep(20);
+    const withBailoutSamples = [];
+    for (let i = 0; i < iters; i++) {
+      const t0 = performance.now();
+      drawNQuads(progHeavyBailout, fbo512, n, i * 0.01,
+        { u_pickingMode: true, u_pickingColor: [0.5,0.3,0.8,1.0] });
+      readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+      withBailoutSamples.push(performance.now() - t0);
+    }
+    const sWith = stats(withBailoutSamples);
+    addRow(tbody, `${n} quads — WITH bailout`, sWith, 'good');
+    allResults.push({ test: 'L', condition: `${n}_quads_with_bailout`, ...sWith });
+    completedTests++; updateProgress();
+    
+    // WITHOUT bailout
+    for (let i = 0; i < warmupIters; i++) {
+      drawNQuads(progHeavyNoBailout, fbo512, n, i * 0.01,
+        { u_pickingMode: true, u_pickingColor: [0.5,0.3,0.8,1.0] });
+      readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+    }
+    await sleep(20);
+    const noBailoutSamples = [];
+    for (let i = 0; i < iters; i++) {
+      const t0 = performance.now();
+      drawNQuads(progHeavyNoBailout, fbo512, n, i * 0.01,
+        { u_pickingMode: true, u_pickingColor: [0.5,0.3,0.8,1.0] });
+      readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+      noBailoutSamples.push(performance.now() - t0);
+    }
+    const sNo = stats(noBailoutSamples);
+    addRow(tbody, `${n} quads — NO bailout`, sNo, 'bad');
+    allResults.push({ test: 'L', condition: `${n}_quads_no_bailout`, ...sNo });
+    
+    results[n] = { with: sWith, no: sNo };
+    completedTests++; updateProgress();
+    await sleep(20);
+  }
+  
+  const speedup1 = results[1].no.mean / results[1].with.mean;
+  const speedup1000 = results[1000].no.mean / results[1000].with.mean;
+  const saved1000 = results[1000].no.mean - results[1000].with.mean;
+  
+  setFinding('L', `<strong>Finding:</strong> bailout speedup at 1 quad: ${speedup1.toFixed(2)}×. 
+    At 1000 quads: <strong>${speedup1000.toFixed(2)}×</strong> 
+    (${results[1000].no.mean.toFixed(1)}ms → ${results[1000].with.mean.toFixed(1)}ms, <strong>${saved1000.toFixed(1)}ms saved per frame</strong>). 
+    The bailout's per-quad savings compound linearly with edge count. 
+    For Sigma users with custom shaders, this single fragment shader line is potentially the largest single optimization available 
+    without changing Sigma's architecture.`);
+}
+
+// ============================================================
+// Test M — Concurrent JS work during async readback
+// ============================================================
+
+async function testM(iters, warmupIters) {
+  const tbody = makeTestGroup('M', 'Concurrent JS work during async readback',
+    'Async readback releases the main thread. Measures how much useful work can be done during the wait.');
+  
+  if (!isWebGL2) {
+    setFinding('M', '<strong>Skipped:</strong> WebGL2 required.');
+    return;
+  }
+  
+  document.getElementById('canvas-label').textContent = 'Test M: measuring concurrent work during async wait';
+  
+  const buf = new Uint8Array(4);
+  const QUAD_COUNT = 200;
+  
+  // Sync version — main thread blocked during readPixels
+  // Try to do JS work; it can't run because main thread is blocked
+  for (let i = 0; i < warmupIters; i++) {
+    drawNQuads(progHeavy, fbo512, QUAD_COUNT, i * 0.01);
+    readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+  }
+  await sleep(20);
+  
+  const syncSamples = [];
+  for (let i = 0; i < iters; i++) {
+    const t0 = performance.now();
+    drawNQuads(progHeavy, fbo512, QUAD_COUNT, i * 0.01);
+    readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+    syncSamples.push(performance.now() - t0);
+  }
+  const sSyncBlock = stats(syncSamples);
+  addRow(tbody, `sync: total main-thread-blocked time`, sSyncBlock, 'bad');
+  allResults.push({ test: 'M', condition: 'sync_blocked_time', ...sSyncBlock });
+  completedTests++; updateProgress();
+  
+  // Async version — main thread can do other work during fence-poll
+  // Measure: how much JS work completes during async readback wait
+  for (let i = 0; i < Math.min(warmupIters, 20); i++) {
+    drawNQuads(progHeavy, fbo512, QUAD_COUNT, i * 0.01);
+    await readPixelsAsync(fbo512, 100, 100, 1, 1, buf);
+  }
+  await sleep(20);
+  
+  const asyncSamples = [];
+  const concurrentWorkSamples = [];
+  const asyncIters = Math.min(iters, 80);
+  
+  for (let i = 0; i < asyncIters; i++) {
+    drawNQuads(progHeavy, fbo512, QUAD_COUNT, i * 0.01);
+    
+    // Kick off async readback and measure how much JS work we can do during the wait
+    const t0 = performance.now();
+    const readbackPromise = readPixelsAsync(fbo512, 100, 100, 1, 1, buf);
+    
+    // Try to do useful JS work concurrently — count iterations completed
+    let workIters = 0;
+    let workSum = 0;
+    let lastCheck = performance.now();
+    const workInterval = setInterval(() => { /* yield occasionally */ }, 0);
+    
+    while (true) {
+      // Do some JS work
+      for (let j = 0; j < 10000; j++) {
+        workSum += Math.sin(j * 0.001) * Math.cos(workIters * 0.01);
+      }
+      workIters++;
+      
+      // Check if readback is done (poll the promise via a flag)
+      // We use a microtask to keep checking
+      const now = performance.now();
+      if (now - lastCheck > 0.5) {
+        lastCheck = now;
+        // Yield to event loop to let fence-poll run
+        await new Promise(r => setTimeout(r, 0));
+        // Check if promise has resolved by racing it against a tiny delay
+        const done = await Promise.race([
+          readbackPromise.then(() => true),
+          new Promise(r => setTimeout(() => r(false), 0))
+        ]);
+        if (done) break;
+      }
+      
+      // Safety bailout
+      if (workIters > 100000) break;
+    }
+    
+    clearInterval(workInterval);
+    const t1 = performance.now();
+    asyncSamples.push(t1 - t0);
+    concurrentWorkSamples.push(workIters);
+    if (workSum === Infinity) console.log('preventing dead code elim');
+  }
+  
+  const sAsyncTotal = stats(asyncSamples);
+  const sWork = stats(concurrentWorkSamples);
+  
+  addRow(tbody, `async: total elapsed time`, sAsyncTotal);
+  addRow(tbody, `async: JS work iterations completed during wait`, sWork, 'good');
+  allResults.push({ test: 'M', condition: 'async_elapsed', ...sAsyncTotal });
+  allResults.push({ test: 'M', condition: 'async_concurrent_work_iters', ...sWork });
+  completedTests++; updateProgress();
+  
+  const workPerCall = sWork.mean.toFixed(0);
+  const workOpsPerCall = (sWork.mean * 10000).toFixed(0); // 10k math ops per iter
+  
+  setFinding('M', `<strong>Finding:</strong> sync readPixels blocks the main thread for ${sSyncBlock.mean.toFixed(2)}ms (no JS can run). 
+    Async readPixels takes ${sAsyncTotal.mean.toFixed(2)}ms wall time, but during that time the main thread completed 
+    <strong>~${workPerCall} chunks of JS work (≈${workOpsPerCall} math operations)</strong>. 
+    <strong>This is async readback's real value:</strong> it doesn't reduce total time, but enables productive concurrent work. 
+    Critical for keeping React updates, layout calculations, and other UI work responsive during hover.`);
+}
+
+// ============================================================
+// Test N — Realistic graph simulation
+// ============================================================
+
+async function testN(iters, warmupIters) {
+  const tbody = makeTestGroup('N', 'Realistic graph simulation',
+    'Closest analog to real Sigma: 1000 small quads at random positions, picking-mode bailout on vs off.');
+  
+  document.getElementById('canvas-label').textContent = 'Test N: 1000-quad graph simulation';
+  
+  const buf = new Uint8Array(4);
+  
+  const conditions = [
+    { label: '1000 quads, normal render (no picking)', fn: (i) => 
+      drawNQuads(progHeavyBailout, fbo512, 1000, i*0.01, 
+        { u_pickingMode: false, u_pickingColor: [0,0,0,1] }) },
+    { label: '1000 quads, picking pass WITH bailout', fn: (i) => 
+      drawNQuads(progHeavyBailout, fbo512, 1000, i*0.01,
+        { u_pickingMode: true, u_pickingColor: [0.5,0.3,0.8,1.0] }) },
+    { label: '1000 quads, picking pass NO bailout', fn: (i) => 
+      drawNQuads(progHeavyNoBailout, fbo512, 1000, i*0.01,
+        { u_pickingMode: true, u_pickingColor: [0.5,0.3,0.8,1.0] }) },
+  ];
+  
+  const results = {};
+  for (const cond of conditions) {
+    for (let i = 0; i < warmupIters; i++) {
+      cond.fn(i);
+      readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+    }
+    await sleep(20);
+    const samples = [];
+    for (let i = 0; i < iters; i++) {
+      const t0 = performance.now();
+      cond.fn(i);
+      readPixelsSync(fbo512, 100, 100, 1, 1, buf);
+      samples.push(performance.now() - t0);
+    }
+    const s = stats(samples);
+    results[cond.label] = s;
+    const highlight = cond.label.includes('WITH bailout') ? 'good' : 
+                      cond.label.includes('NO bailout') ? 'bad' : '';
+    addRow(tbody, cond.label, s, highlight);
+    allResults.push({ test: 'N', condition: cond.label, ...s });
+    completedTests++; updateProgress();
+    await sleep(20);
+  }
+  
+  const normal = results['1000 quads, normal render (no picking)'].mean;
+  const pickingBailout = results['1000 quads, picking pass WITH bailout'].mean;
+  const pickingNoBailout = results['1000 quads, picking pass NO bailout'].mean;
+  const bailoutWin = pickingNoBailout / pickingBailout;
+  const pickingCost = pickingNoBailout - normal;
+  const pickingCostWithBailout = pickingBailout - normal;
+  const reductionPct = (1 - pickingCostWithBailout/pickingCost) * 100;
+  
+  setFinding('N', `<strong>Finding:</strong> normal render of 1000 heavy quads: ${normal.toFixed(2)}ms. 
+    Adding a picking pass with NO bailout: ${pickingNoBailout.toFixed(2)}ms (+${pickingCost.toFixed(1)}ms picking cost). 
+    Adding picking pass WITH bailout: ${pickingBailout.toFixed(2)}ms (+${pickingCostWithBailout.toFixed(1)}ms picking cost). 
+    <strong>Bailout reduces picking pass overhead by ${reductionPct.toFixed(0)}%</strong> (${bailoutWin.toFixed(2)}× faster). 
+    For a real graph at scale, this is the strongest no-code-change recommendation Sigma can offer custom-shader authors.`);
+}
+
+// ============================================================
+// Main
+// ============================================================
+
+async function runAll(iters, warmupIters) {
+  resultsContainer.innerHTML = '';
+  allResults.length = 0;
+  document.getElementById('copy-results').disabled = true;
+  document.getElementById('email-results').disabled = true;
+  document.getElementById('run-all').disabled = true;
+  document.getElementById('run-quick').disabled = true;
+  
+  // Test counts: J=4, K=4, L=8, M=3, N=3 = 22 total
+  totalTests = 22;
+  completedTests = 0;
+  updateProgress();
+  
+  try {
+    setStatus('Test J: draw call scaling...');
+    await testJ(iters, warmupIters);
+    
+    setStatus('Test K: framebuffer size impact...');
+    await testK(iters, warmupIters);
+    
+    setStatus('Test L: PICKING_MODE bailout at scale...');
+    await testL(iters, warmupIters);
+    
+    setStatus('Test M: concurrent JS work during async readback...');
+    await testM(iters, warmupIters);
+    
+    setStatus('Test N: realistic graph simulation...');
+    await testN(iters, warmupIters);
+    
+    setStatus(`v3 suite complete. ${allResults.length} measurements captured.`);
+    document.getElementById('copy-results').disabled = false;
+    document.getElementById('email-results').disabled = false;
+  } catch (e) {
+    setStatus(`Error: ${e.message}`);
+    console.error(e);
+  } finally {
+    document.getElementById('run-all').disabled = false;
+    document.getElementById('run-quick').disabled = false;
+    document.getElementById('canvas-label').textContent = 'Suite complete.';
+  }
+}
+
+function generateMarkdown() {
+  let md = `# WebGL Picking Pipeline Benchmark v3 — scale & concurrency\n\n## Environment\n\n`;
+  md += `- **User agent:** \`${envInfo.userAgent}\`\n`;
+  md += `- **WebGL version:** ${envInfo.webglVersion}\n`;
+  md += `- **GPU vendor:** \`${envInfo.gpuVendor}\`\n`;
+  md += `- **GPU renderer:** \`${envInfo.gpuRenderer}\`\n`;
+  md += `- **Timestamp:** ${envInfo.timestamp}\n\n`;
+  
+  const byTest = {};
+  for (const r of allResults) {
+    if (!byTest[r.test]) byTest[r.test] = [];
+    byTest[r.test].push(r);
+  }
+  
+  const testTitles = {
+    J: 'Test J: Draw call scaling',
+    K: 'Test K: Framebuffer size impact',
+    L: 'Test L: PICKING_MODE bailout at scale',
+    M: 'Test M: Concurrent JS work during async readback',
+    N: 'Test N: Realistic graph simulation',
+  };
+  
+  for (const test of ['J','K','L','M','N']) {
+    if (!byTest[test]) continue;
+    md += `## ${testTitles[test]}\n\n`;
+    md += `| Condition | N | Mean (ms) | Median | p95 | p99 | StdDev |\n`;
+    md += `|---|---|---|---|---|---|---|\n`;
+    for (const r of byTest[test]) {
+      md += `| ${r.condition} | ${r.n||'-'} | ${(r.mean??0).toFixed(3)} | ${(r.median??0).toFixed(3)} | ${(r.p95??0).toFixed(3)} | ${(r.p99??0).toFixed(3)} | ${(r.stddev??0).toFixed(3)} |\n`;
+    }
+    const findingEl = document.getElementById(`finding-${test}`);
+    if (findingEl && findingEl.textContent) {
+      md += `\n${findingEl.textContent.replace(/Finding:\s*/, '**Finding:** ').trim()}\n`;
+    }
+    md += `\n`;
+  }
+  return md;
+}
+
+document.getElementById('run-all').addEventListener('click', () => runAll(150, 30));
+document.getElementById('run-quick').addEventListener('click', () => runAll(60, 15));
+document.getElementById('copy-results').addEventListener('click', () => {
+  navigator.clipboard.writeText(generateMarkdown()).then(() => setStatus('Copied as markdown.'));
+});
+
+// Compose a compact "Browser / GPU" tag for the email subject line.
+function deriveEnvTag() {
+  const ua = envInfo.userAgent || '';
+  let browser = 'Unknown';
+  // Order matters: Edge before Chrome (Edge UA contains "Chrome"), Chrome before Safari (Chrome UA contains "Safari").
+  if (/Edg\//.test(ua)) browser = 'Edge';
+  else if (/Firefox\//.test(ua)) browser = 'Firefox';
+  else if (/Chrome\//.test(ua)) browser = 'Chrome';
+  else if (/Safari\//.test(ua)) browser = 'Safari';
+
+  // GPU renderer strings are often noisy ("ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Super (0x...) Direct3D11 ...)").
+  // Pull a short readable fragment.
+  let gpu = (envInfo.gpuRenderer || '').replace(/^ANGLE\s*\(\s*[^,]+,\s*/, '').split(/[(,]/)[0].trim();
+  if (gpu.length > 60) gpu = gpu.slice(0, 60) + '...';
+  if (!gpu) gpu = 'unknown GPU';
+
+  return `${browser} / ${gpu}`;
+}
+
+document.getElementById('email-results').addEventListener('click', () => {
+  const markdown = generateMarkdown();
+  const date = new Date().toISOString().slice(0, 10);
+  const envTag = deriveEnvTag();
+  const subject = `Benchmark results — ${date} — ${envTag}`;
+  const body =
+    "Hi Ryan,\n\n" +
+    "Benchmark results below (also copied to your clipboard — paste here if your mail client " +
+    "didn't include them automatically).\n\n" +
+    "---\n\n" +
+    markdown;
+
+  // Copy first so the user has the full payload on the clipboard regardless of mailto behavior.
+  navigator.clipboard.writeText(markdown).then(() => {
+    // Some mail clients truncate long mailto bodies; we include the body for clients that handle it,
+    // and rely on the clipboard for those that don't.
+    const href = `mailto:hello@bitmosh.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    // Use location.href rather than window.open so mobile mail clients launch reliably.
+    window.location.href = href;
+    setStatus('Results copied. Opening your mail client — paste in the message body if needed, then send.');
+  }).catch(() => {
+    // Fallback if clipboard API is blocked (rare, but e.g. insecure contexts).
+    const href = `mailto:hello@bitmosh.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = href;
+    setStatus('Clipboard blocked. Mail client opened with results in the body (may be truncated by your client).');
+  });
+});
+
+drawNQuads(progHeavy, fbo512, 50, 0);
+document.getElementById('canvas-label').textContent = 'Ready. Click "Run full v3 suite" to begin.';
+
+</script>
+</body>
+</html>
