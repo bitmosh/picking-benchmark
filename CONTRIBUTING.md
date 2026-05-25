@@ -6,16 +6,16 @@ Thanks for your interest. This is a research-artifact repo — the primary contr
 
 Roughly in order of how much it would refine the picture:
 
-1. **Apple Silicon (M1, M2, M3, M4) on Safari** — the existing Safari data is from Intel HD 4000 / Catalina. The Metal pipeline on Apple Silicon may behave substantially differently.
+1. **Apple Silicon variants** — current data covers M4 Max under Safari and Brave on macOS 26. Still missing: M1, M2, M3, lower-tier M4 (base, Pro), and older macOS versions running on Apple Silicon. The slow path that affects Intel-era Catalina may behave differently on Apple Silicon under older OS versions, and this would be worth measuring.
 2. **iOS Safari and Android Chrome on actual phones** — current "mobile-class" data is approximated from a Rockchip RK3588 (Mali-G610), which is GPU-architecturally close but lives in a different browser environment.
 3. **AMD GPUs** — there is currently no AMD data in the set. RDNA2/RDNA3 desktop, AMD integrated, anything.
 4. **High-DPI displays at native `devicePixelRatio`** — all current measurements are at DPR=1. Retina / 4K behavior is interesting because framebuffer-size scaling differs by backend.
-5. **Browsers not yet represented** — Brave, Arc, mobile browsers, etc.
+5. **Browsers not yet represented** — Arc, Edge, mobile browsers, etc.
 6. **Re-runs of platforms already in the set** — variance characterization helps separate signal from noise.
 
 ## How to run the benchmark
 
-1. Open [bitmosh.dev/labs/picking-benchmark](https://bitmosh.dev/labs/picking-benchmark), or open `readpixels-benchmark.html` locally.
+1. Open [bitmosh.dev/labs/picking-benchmark](https://bitmosh.dev/labs/picking-benchmark), or open `picking-benchmark.html` locally.
 2. Close other tabs and heavy apps if you can — keeps the GPU queue clean and the measurements honest.
 3. Click **Run full v3 suite**. Quick run is fine for a smoke test but the full suite is what produces useful comparison data.
 4. When it finishes, click **Copy as markdown** (or **Email results to bitmosh**).
@@ -31,12 +31,13 @@ Two paths, both fine.
    ```
    NN-browser-os-gpu-runR.md
    ```
+   (Or the more detailed `NN-arch-os-gpu-browser-runR.md` style used in the current data set — either works, pick whichever conveys the platform best.)
    Use the next available number for `NN` and `1` for `R` (or `2`, `3` if you're contributing multiple runs on the same platform).
    Examples of valid filenames:
    ```
-   16-safari-m4-macos15-run1.md
-   17-chrome-android-mali-g78-run1.md
-   18-firefox-windows-rx7900xtx-run1.md
+   12-safari-macos15-m3pro-run1.md
+   13-chrome-android-mali-g78-run1.md
+   14-firefox-windows-rx7900xtx-run1.md
    ```
 3. Open a PR. Brief description: platform, anything unusual about the run (thermal throttling, background load, browser flags, etc.).
 
